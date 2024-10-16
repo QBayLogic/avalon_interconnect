@@ -1,0 +1,133 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+library work;
+use work.esf_common_pkg.all;
+
+entity {{ module_name }} is
+  generic(
+    g_addr_width : integer := {{ address_width }};
+    g_data_width : integer := {{ data_width }}
+  );
+  port(
+    -- Global 
+    clk_i  : in std_logic;
+    rstn_i : in std_logic;
+
+    -- Avalon master port
+    avs_i                 : in    t_avalon_slv_in;
+    avs_o                 : out   t_avalon_slv_out;
+
+    -- Avalon slave ports
+    avm_address_o         : out   std_logic_vector(g_addr_width - 1 downto 0);
+    avm_writedata_o       : out   std_logic_vector(g_data_width - 1 downto 0);
+    avm_byteenable_o      : out   std_logic_vector(g_data_width / 8 - 1 downto 0);
+    {% for i in range(slave_count) %}
+    -- Slave {{ i }}
+    avm{{ i }}_read_o           : out   std_logic;
+    avm{{ i }}_write_o          : out   std_logic;
+    avm{{ i }}_readdata_i       : in    std_logic_vector(g_data_width - 1 downto 0);
+    avm{{ i }}_waitrequest_i    : in    std_logic;
+    {% if loop.last -%}
+    avm{{ i }}_readdatavalid_i  : in    std_logic
+    {%- else -%}
+    avm{{ i }}_readdatavalid_i  : in    std_logic;
+    {%- endif %}
+    {% endfor %}
+  );
+end entity;
+
+architecture rtl of {{ module_name }} is
+
+  -- Internal signals for address decoding
+  signal i_selected_slave   : integer range 0 to {{ slave_count - 1 }};
+  signal i_selected_slave_q : integer range 0 to {{ slave_count - 1 }};
+  signal selected_slave     : integer range 0 to {{ slave_count - 1 }};
+
+begin
+
+  -- Address decoding logic
+  p_addr_dec : process (avs_i) is
+  begin
+    -- Simple address decoding based on the upper bits of the address
+    case avs_i.address(g_addr_width - 1 downto g_addr_width - 4) is
+    {% for i in range(slave_count) -%}
+      when "{{ '{:04b}'.format(i) }}" => 
+        i_selected_slave <= {{ i }};
+    {% endfor -%}
+      when others => 
+        i_selected_slave <= 0; -- Default to slave 0
+    end case;
+  end process;
+
+  u_delay_slv_sel : process (clk_i, rstn_i) is
+  begin
+    if rising_edge(clk_i) then
+      if rstn_i = '0' then
+        i_selected_slave_q <= 0;
+      elsif avs_i.write = '1' or avs_i.read = '1' then
+        i_selected_slave_q <= i_selected_slave;
+      end if;
+    end if;
+  end process;
+
+  selected_slave <= i_selected_slave when avs_i.write = '1' or avs_i.read = '1' else
+                    i_selected_slave_q;
+
+  -- Address
+  avm_address_o <= avs_i.address;
+  avm_byteenable_o <= avs_i.byteenable;
+  avm_writedata_o <= avs_i.writedata;
+
+  -- Read signals
+  {% for i in range(slave_count) -%}
+      avm{{ i }}_read_o  <= '1' when avs_i.read = '1' and selected_slave = {{ i }} else '0';
+  {% endfor %}
+
+  -- Write signals
+  {% for i in range(slave_count) -%}
+      avm{{ i }}_write_o  <= '1' when avs_i.write = '1' and selected_slave = {{ i }} else '0';
+  {% endfor %}
+
+  -- Read data mux
+  p_readdata_mux: process(all)
+  begin
+    case selected_slave is
+    {% for i in range(slave_count) -%}
+      when {{ i }} => 
+        avs_o.readdata <= avm{{ i }}_readdata_i;
+    {% endfor -%}
+      when others =>  
+        avs_o.readdata <= (others => '0');
+    end case;
+  end process;
+
+  -- Wait request mux
+  p_waitrequest_mux: process(all)
+  begin
+    case selected_slave is
+    {% for i in range(slave_count) -%}
+      when {{ i }} => 
+        avs_o.waitrequest <= avm{{ i }}_waitrequest_i;
+    {% endfor -%}
+      when others =>  
+        avs_o.waitrequest <= '0';
+    end case;
+  end process;
+
+  -- Read data valid mux
+  p_readdatavalid_mux: process(all)
+  begin
+    case selected_slave is
+    {% for i in range(slave_count) -%}
+      when {{ i }} => 
+        avs_o.readdatavalid <= avm{{ i }}_readdatavalid_i;
+    {% endfor -%}
+      when others =>  
+        avs_o.readdatavalid <= '0';
+    end case;
+  end process;
+
+end architecture;
+

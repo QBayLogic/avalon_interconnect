@@ -1,0 +1,18 @@
+CAPI=2:
+#       Owner : library : core
+name: "qbaylogic:deps:avalon_interconnect:0.0.1"
+description: "Avalon interconnect"
+
+filesets:
+  rtl:
+    files:
+    {% for file in vhdl_files -%}
+    - {{ file }}
+    {% endfor -%}
+    file_type: vhdlSource-2008
+
+targets:
+  default: &default
+    filesets:
+      - rtl
+
