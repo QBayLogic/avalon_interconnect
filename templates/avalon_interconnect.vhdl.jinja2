@@ -11,9 +11,9 @@ entity {{ module_name }} is
     g_data_width : integer := {{ data_width }}
   );
   port(
-    -- Global 
-    clk_i  : in std_logic;
-    rstn_i : in std_logic;
+    -- Global
+    clk_i                 : in    std_logic;
+    rstn_i                : in    std_logic;
 
     -- Avalon master port
     avs_i                 : in    t_avalon_slv_in;
@@ -23,18 +23,19 @@ entity {{ module_name }} is
     avm_address_o         : out   std_logic_vector(g_addr_width - 1 downto 0);
     avm_writedata_o       : out   std_logic_vector(g_data_width - 1 downto 0);
     avm_byteenable_o      : out   std_logic_vector(g_data_width / 8 - 1 downto 0);
-    {% for i in range(slave_count) %}
+{% for i in range(slave_count) %}
     -- Slave {{ i }}
     avm{{ i }}_read_o           : out   std_logic;
     avm{{ i }}_write_o          : out   std_logic;
     avm{{ i }}_readdata_i       : in    std_logic_vector(g_data_width - 1 downto 0);
     avm{{ i }}_waitrequest_i    : in    std_logic;
-    {% if loop.last -%}
-    avm{{ i }}_readdatavalid_i  : in    std_logic
-    {%- else -%}
-    avm{{ i }}_readdatavalid_i  : in    std_logic;
-    {%- endif %}
-    {% endfor %}
+{% set spaces = ' ' * 4 %}
+{% if loop.last -%}
+{{ spaces }}avm{{ i }}_readdatavalid_i  : in    std_logic
+{%- else -%}
+{{ spaces }}avm{{ i }}_readdatavalid_i  : in    std_logic;
+{%- endif %}
+{% endfor %}
   );
 end entity;
 
@@ -53,10 +54,10 @@ begin
     -- Simple address decoding based on the upper bits of the address
     case avs_i.address(g_addr_width - 1 downto g_addr_width - 4) is
     {% for i in range(slave_count) -%}
-      when "{{ '{:04b}'.format(i) }}" => 
+      when "{{ '{:04b}'.format(i) }}" =>
         i_selected_slave <= {{ i }};
     {% endfor -%}
-      when others => 
+      when others =>
         i_selected_slave <= 0; -- Default to slave 0
     end case;
   end process;
@@ -81,50 +82,51 @@ begin
   avm_writedata_o <= avs_i.writedata;
 
   -- Read signals
-  {% for i in range(slave_count) -%}
-      avm{{ i }}_read_o  <= '1' when avs_i.read = '1' and selected_slave = {{ i }} else '0';
-  {% endfor %}
+{% set spaces = ' ' * 2 %}
+{% for i in range(slave_count) -%}
+{{ spaces }}avm{{ i }}_read_o  <= '1' when avs_i.read = '1' and selected_slave = {{ i }} else '0';
+{% endfor %}
 
   -- Write signals
-  {% for i in range(slave_count) -%}
-      avm{{ i }}_write_o  <= '1' when avs_i.write = '1' and selected_slave = {{ i }} else '0';
-  {% endfor %}
+{% for i in range(slave_count) -%}
+{{ spaces }}avm{{ i }}_write_o  <= '1' when avs_i.write = '1' and selected_slave = {{ i }} else '0';
+{% endfor %}
 
   -- Read data mux
-  p_readdata_mux: process(all)
+  p_readdata_mux : process (all) is
   begin
     case selected_slave is
     {% for i in range(slave_count) -%}
-      when {{ i }} => 
+      when {{ i }} =>
         avs_o.readdata <= avm{{ i }}_readdata_i;
     {% endfor -%}
-      when others =>  
+      when others =>
         avs_o.readdata <= (others => '0');
     end case;
   end process;
 
   -- Wait request mux
-  p_waitrequest_mux: process(all)
+  p_waitrequest_mux : process(all) is
   begin
     case selected_slave is
     {% for i in range(slave_count) -%}
-      when {{ i }} => 
+      when {{ i }} =>
         avs_o.waitrequest <= avm{{ i }}_waitrequest_i;
     {% endfor -%}
-      when others =>  
+      when others =>
         avs_o.waitrequest <= '0';
     end case;
   end process;
 
   -- Read data valid mux
-  p_readdatavalid_mux: process(all)
+  p_readdatavalid_mux : process(all) is
   begin
     case selected_slave is
     {% for i in range(slave_count) -%}
-      when {{ i }} => 
+      when {{ i }} =>
         avs_o.readdatavalid <= avm{{ i }}_readdatavalid_i;
     {% endfor -%}
-      when others =>  
+      when others =>
         avs_o.readdatavalid <= '0';
     end case;
   end process;
