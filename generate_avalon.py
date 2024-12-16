@@ -17,10 +17,11 @@ import json
 import fnmatch
 from jinja2 import Template, Environment, FileSystemLoader
 
-curwd = os.path.abspath(os.path.dirname(__file__))
+src_dir = os.path.abspath(os.path.dirname(__file__))
+cwd = os.getcwd()
 
-vhdl_template = os.path.join(curwd, "templates")
-config_file = os.path.join(curwd,'config.json')
+vhdl_template = os.path.join(src_dir, "templates")
+config_file = os.path.join(src_dir, 'config.json')
 
 file_loader = FileSystemLoader(vhdl_template)  # Directory where the template file is stored
 env = Environment(loader=file_loader)
@@ -75,7 +76,7 @@ def generate_interconnect(module_name, address_width, data_width, slave_count):
 def write_interconnect(module_name, generated_vhdl):
     """ Write the generated interconnect to file
     """
-    output_directory = os.path.join(curwd,module_name)
+    output_directory = os.path.join(cwd, module_name)
     file_name = f"{module_name}.vhdl"
     output_file = os.path.join(output_directory, file_name)
     print(f"Writing interconnect to: {output_file}")
@@ -107,7 +108,7 @@ def last_dir_and_filename(files):
     return last_dir_and_files
 
 def generate_core_file():
-    vhdl_files = find_vhdl_files(curwd)
+    vhdl_files = find_vhdl_files(cwd)
     print(vhdl_files)
     stripped_vhdl_files = last_dir_and_filename(vhdl_files)
     print(stripped_vhdl_files)
@@ -121,7 +122,7 @@ def generate_core_file():
 def write_core_file(generated_core_file):
     """ Write the generated interconnect to file
     """
-    output_file = os.path.join(curwd,'avalon_interconnect.core')
+    output_file = os.path.join(cwd, 'avalon_interconnect.core')
     with open(output_file, "w") as f:
         f.write(generated_core_file)
 
